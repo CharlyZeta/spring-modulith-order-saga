@@ -1,0 +1,52 @@
+# Contexto y Rol
+Eres un **Senior Backend Developer especialista en Web Scraping e Integración de APIs para plataformas de reclutamiento**. Tienes amplia experiencia en Java 21, Spring Boot, Spring WebClient, Integración con modelos de IA, y desarrollo de interfaces de usuario web modernas y reactivas utilizando **Vaadin**.
+
+# 🚨 PASO 0: LECTURA OBLIGATORIA (REGLAS DEL ESPACIO DE TRABAJO)
+Antes de proponer arquitectura o escribir cualquier línea de código, **DEBES leer obligatoriamente** el contenido de la carpeta `.agents/` en el directorio raíz de este proyecto. Tu código debe alinearse estrictamente con:
+1. `proyect_prompt.txt` (Reglas de Clean Code, SOLID, DTOs como Java 21 Records, uso de Spring WebClient, y el modelo de datos normalizado `JobOpportunity`).
+2. `PROFESSIONAL ENGINEERING BASELINE.txt` (Estándares profesionales, manejo de errores explícito, separación de responsabilidades, clean architecture).
+3. Asegurarte de que al finalizar documentes los cambios siguiendo fielmente `Rules system for Readme.MD.txt`.
+
+# Objetivo Principal del Desarrollo
+Implementar un ecosistema dinámico impulsado por IA que descubra, analice e integre nuevas APIs de empleo (por ejemplo, GetOnboard u otras fuentes), las mapee hacia nuestro modelo estandarizado `JobOpportunity`, y exponga una **Interfaz Web en Vaadin** completa que permita buscar, filtrar y administrar dichas integraciones e ingresar sus respectivas API Keys dinámicamente.
+
+# Requerimientos Técnicos y Arquitectura (Paso a Paso)
+
+## 1. Módulo de Consolidación e IA para APIs Nuevas
+- **Consumo Dinámico y Descubrimiento**: Diseña el flujo en el que la IA pueda analizar un JSON crudo de cualquier bolsa de empleo y extraer su formato de mapeo inicialmente.
+- **🔥 CONSULTAS METAMÓRFICAS (Self-Healing AI)**: Esta es una característica arquitectónica crítica que debes implementar usando todo el potencial de **Spring AI**. 
+  - Las consultas a las fuentes no pueden fallar permanentemente si los proveedores cambian su estructura JSON.
+  - Implementa un mecanismo (interceptores o Fallbacks vía Spring WebFlux/Resilience4J) que detecte inconsistencias imprevistas (errores de parseo JSON o campos nulos masivos).
+  - Al detectar este fallo, el sistema entra en fase *Metamórfica*: envía el nuevo fragmento de JSON anómalo al **LLM vía Spring AI**, pide que infiera los cambios subyacentes de la API ("¿Dónde movieron el salario y los tags?"), propone una regeneración de la estructura, y actualiza los parámetros en la base de datos `ApiEndpointStructure`. Todo **sin intervención humana**.
+- **Mapper Abstracto**: El sistema debe basarse en un algoritmo que utilice las reglas de metamorfismo en BD para forjar el Record nativo `JobOpportunity`.
+- Para normalizar la data originada, el procesamiento del modelo debe encargarse estrictamente de:
+  - **Salarios**: Conversión de rangos y salarios a formato numérico unificado (ej: Moneda estándar USD o ARS, formato numérico mensual/anual).
+  - **Seniority**: Clasificación explícita mapeada a `Junior`, `Ssr`, `Sr` (limpiando textos largos provistos por las bolsas de trabajo).
+  - **Habilidades e Idiomas**: Extracción de tags clave (Ej: "Java", "Spring", "AWS") e identificación del idioma principal.
+  - **Preparación Generativa de CV/Postulación (Future-Proofing)**: Además de las métricas duras, la entidad debe proveer `Map<String, Object> rawContextMetadata` que almacene explícitamente el tono textual, la descripción completa y jerga particular de la empresa vacante. Esto es FUNDAMENTAL para que, basándose en el Perfil Base del Usuario, el sistema **Spring AI** pueda utilizar dichos metadatos para **generar un currículum adaptativo**, redactar **cartas de presentación (Cover Letters)** personalizadas y proveer de fragmentos de texto (icebreakers) óptimos para redes sociales o laborales. Diseña la entidad dejando esto preparado.
+
+## 2. Motor de Filtrado y Búsqueda (Match con el Perfil)
+- Desarrolla la capa de repositorios/servicios encargados de aplicar filtros dinámicos (usando Spring Data Specifications o Streams si está en caché).
+- Requerimiento: Poder hacer un match efectivo aplicando criterios como:
+  - Salario mínimo esperado.
+  - Nivel de Seniority exigido vs el del usuario.
+  - Coincidencia de requerimientos técnicos o idiomas (Ej: Excluir ofertas que requieran "Inglés Bilingüe" si no está en el perfil).
+
+## 3. Frontend / Interfaz Gráfica con Vaadin
+Crea los componentes y vistas UI asegurándote de no acoplar la lógica de negocio al controlador UI (`@Route`). Utiliza componentes nativos de Vaadin:
+- **Layout Principal (`MainLayout`)**: Estructura `AppLayout` con un Side Drawer para navegar entre las vistas ("Buscar Empleos", "Integraciones API").
+- **Pantalla de Empleos (`JobsView`)**: 
+  - Una `Grid<JobOpportunity>` principal con columnas para Título, Empresa, Rango Salarial, Modalidad, Seniority y Tags técnicos.
+  - Un Sidebar de Filtros visualmente rico: Campos numéricos para salario, ComboBoxes para Seniority e Idioma, y un campo de búsqueda de texto. Los filtros deben actualizar la Grilla de manera reactiva.
+- **Pantalla de Configuración de APIs (`ApiConfigView`)**:
+  - Interfaz administrativa que liste las APIs disponibles y las "descubiertas por la IA".
+  - Formularios para gestionar y dar de alta de forma dinámica las **API Keys**, *Base URLs* o *Tokens*.
+  - Indicadores visuales de estado (Online, Error, Autenticación Pendiente, Rate Limit alcanzado).
+
+# Reglas Estrictas de Implementación
+1. **Integración Externa**: Todo consumo debe hacerse mediate **Spring WebClient** reactivo.
+2. **Clean UI**: El código de Vaadin debe estar fuertemente tipado e inyectar los servicios correctos mediante el contenedor de Spring (`@Autowired` o en los constructores).
+3. **Manejo de Errores Visual**: Si no hay API Key activa para una integración, O el Rate Limit de GetOnboard se excede, el backend debe lanzar una custom exception manejada por ControllerAdvice, y en el Frontend el usuario debe ver un Componente de `Notification` de Vaadin estilizado amigablemente en lugar de errores crudos.
+
+# Ejecución de Tu Tarea
+Al recibir este prompt, debes responder primero confirmando que has asimilado en su totalidad la carpeta `.agents/`. A partir de ahí, entrégame el **Plan de Implementación y la Estructura de Paquetes propuesta**, junto a las clases paso a paso, manteniendo el estándar de código riguroso que se te exige.
