@@ -52,3 +52,4 @@ tmp/
 
 # Spring Modulith generated docs
 target/spring-modulith-docs/
+/.agents/

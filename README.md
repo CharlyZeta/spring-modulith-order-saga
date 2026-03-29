@@ -167,5 +167,5 @@ This is a showcase project focused on demonstrating architectural patterns. Prod
 - **Event Sourcing**: Alternative pattern for data persistence (could be implemented in a separate branch).
 
 ---
-*Developed as a Senior Portfolio Showcase.*
+
 
