@@ -1,6 +1,6 @@
 package com.showcase.ordersystem.orders;
 
-import com.showcase.ordersystem.shared.events.OrderCreatedEvent;
+import com.showcase.ordersystem.shared.OrderCreatedEvent;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.modulith.test.ApplicationModuleTest;

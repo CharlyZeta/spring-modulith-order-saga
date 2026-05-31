@@ -29,6 +29,9 @@ public class Order {
     @Column(nullable = false)
     private String customerEmail;
 
+    @Column(unique = true)
+    private String idempotencyKey;
+
     @OneToMany(mappedBy = "order", cascade = CascadeType.ALL, orphanRemoval = true)
     @Builder.Default
     private List<OrderItem> items = new ArrayList<>();

@@ -3,7 +3,7 @@
  * 
  * <p>Consumed Events:</p>
  * <ul>
- *   <li>{@link com.showcase.ordersystem.shared.events.OrderCompletedEvent} - From orders module</li>
+ *   <li>{@link com.showcase.ordersystem.shared.OrderCompletedEvent} - From orders module</li>
  * </ul>
  */
 @org.springframework.modulith.ApplicationModule

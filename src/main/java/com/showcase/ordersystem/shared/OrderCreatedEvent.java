@@ -1,4 +1,4 @@
-package com.showcase.ordersystem.shared.events;
+package com.showcase.ordersystem.shared;
 
 import java.math.BigDecimal;
 import java.time.Instant;

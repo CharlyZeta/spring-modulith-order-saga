@@ -1,6 +1,6 @@
 package com.showcase.ordersystem.notifications;
 
-import com.showcase.ordersystem.shared.events.OrderCompletedEvent;
+import com.showcase.ordersystem.shared.OrderCompletedEvent;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.amqp.rabbit.core.RabbitTemplate;
@@ -45,16 +45,12 @@ public class NotificationService {
         );
 
         // Send to RabbitMQ (external notification service would consume this)
-        try {
-            rabbitTemplate.convertAndSend(
-                    "notifications.exchange",
-                    "notification.email",
-                    message
-            );
-            log.info("Sent notification to RabbitMQ for customer: {}", event.customerEmail());
-        } catch (Exception e) {
-            log.error("Failed to send notification for order: {}", event.orderId(), e);
-        }
+        rabbitTemplate.convertAndSend(
+                "notifications.exchange",
+                "notification.email",
+                message
+        );
+        log.info("Sent notification to RabbitMQ for customer: {}", event.customerEmail());
     }
 
     /**

@@ -2,8 +2,8 @@ package com.showcase.ordersystem.inventory;
 
 import com.showcase.ordersystem.inventory.internal.InventoryItem;
 import com.showcase.ordersystem.inventory.internal.InventoryRepository;
-import com.showcase.ordersystem.shared.events.InventoryReservedEvent;
-import com.showcase.ordersystem.shared.events.OrderCreatedEvent;
+import com.showcase.ordersystem.shared.InventoryReservedEvent;
+import com.showcase.ordersystem.shared.OrderCreatedEvent;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
@@ -17,6 +17,7 @@ import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.*;
 
@@ -81,10 +82,9 @@ class InventoryServiceTest {
 
         when(inventoryRepository.findByProductId(productId)).thenReturn(Optional.of(item));
 
-        // Act
-        inventoryService.onOrderCreated(event);
+        // Act & Assert
+        assertThrows(RuntimeException.class, () -> inventoryService.onOrderCreated(event));
 
-        // Assert
         verify(inventoryRepository, never()).save(any());
         
         ArgumentCaptor<InventoryReservedEvent> eventCaptor = ArgumentCaptor.forClass(InventoryReservedEvent.class);

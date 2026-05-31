@@ -1,6 +1,6 @@
 package com.showcase.ordersystem.notifications;
 
-import com.showcase.ordersystem.shared.events.OrderCompletedEvent;
+import com.showcase.ordersystem.shared.OrderCompletedEvent;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;

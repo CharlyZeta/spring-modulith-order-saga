@@ -2,7 +2,7 @@ package com.showcase.ordersystem.inventory;
 
 import com.showcase.ordersystem.inventory.internal.InventoryItem;
 import com.showcase.ordersystem.inventory.internal.InventoryRepository;
-import com.showcase.ordersystem.shared.events.OrderCreatedEvent;
+import com.showcase.ordersystem.shared.OrderCreatedEvent;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;

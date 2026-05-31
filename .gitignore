@@ -50,6 +50,7 @@ tmp/
 *.tar.gz
 *.swp
 
-# Spring Modulith generated docs
-target/spring-modulith-docs/
-/.agents/
+# Documentation & Showcase
+IMPROVEMENTS.md
+SHOWCASE.md
+LINKEDIN_COPY.md

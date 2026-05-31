@@ -18,15 +18,22 @@ public class OrderController {
 
     @PostMapping
     public ResponseEntity<CreateOrderResponse> createOrder(
-            @RequestBody @jakarta.validation.Valid OrderService.CreateOrderRequest request) {
+            @RequestBody @jakarta.validation.Valid OrderService.CreateOrderRequest request,
+            @RequestHeader(value = "X-Idempotency-Key", required = false) String idempotencyKey) {
         
-        String orderId = orderService.createOrder(request);
+        String orderId = orderService.createOrder(request, idempotencyKey);
         return ResponseEntity.ok(new CreateOrderResponse(orderId));
     }
 
     @GetMapping("/{orderId}")
     public ResponseEntity<OrderService.OrderInfo> getOrderById(@PathVariable String orderId) {
         return ResponseEntity.ok(orderService.getOrderById(orderId));
+    }
+
+    @PostMapping("/{orderId}/cancel")
+    public ResponseEntity<Void> cancelOrder(@PathVariable String orderId) {
+        orderService.cancelOrder(orderId);
+        return ResponseEntity.noContent().build();
     }
 
     @GetMapping("/customer/{customerId}")

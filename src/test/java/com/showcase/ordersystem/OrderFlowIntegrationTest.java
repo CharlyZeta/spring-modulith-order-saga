@@ -2,8 +2,8 @@ package com.showcase.ordersystem;
 
 import com.showcase.ordersystem.inventory.InventoryService;
 import com.showcase.ordersystem.orders.OrderService;
-import com.showcase.ordersystem.shared.events.OrderCompletedEvent;
-import com.showcase.ordersystem.shared.events.OrderCreatedEvent;
+import com.showcase.ordersystem.shared.OrderCompletedEvent;
+import com.showcase.ordersystem.shared.OrderCreatedEvent;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;

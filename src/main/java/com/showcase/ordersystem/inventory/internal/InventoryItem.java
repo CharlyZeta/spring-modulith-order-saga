@@ -54,6 +54,12 @@ public class InventoryItem {
         this.lastUpdated = Instant.now();
     }
 
+    public void release(int quantity) {
+        this.reservedQuantity -= quantity;
+        this.availableQuantity += quantity;
+        this.lastUpdated = Instant.now();
+    }
+
     @PrePersist
     @PreUpdate
     void updateTimestamp() {

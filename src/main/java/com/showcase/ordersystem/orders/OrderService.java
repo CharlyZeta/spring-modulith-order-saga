@@ -4,9 +4,10 @@ import com.showcase.ordersystem.orders.internal.Order;
 import com.showcase.ordersystem.orders.internal.OrderItem;
 import com.showcase.ordersystem.orders.internal.OrderRepository;
 import com.showcase.ordersystem.orders.internal.OrderStatus;
-import com.showcase.ordersystem.shared.events.InventoryReservedEvent;
-import com.showcase.ordersystem.shared.events.OrderCompletedEvent;
-import com.showcase.ordersystem.shared.events.OrderCreatedEvent;
+import com.showcase.ordersystem.shared.InventoryReservedEvent;
+import com.showcase.ordersystem.shared.OrderCancelledEvent;
+import com.showcase.ordersystem.shared.OrderCompletedEvent;
+import com.showcase.ordersystem.shared.OrderCreatedEvent;
 import io.micrometer.core.instrument.MeterRegistry;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -35,6 +36,20 @@ public class OrderService {
 
     @Transactional
     public String createOrder(CreateOrderRequest request) {
+        return createOrder(request, null);
+    }
+
+    @Transactional
+    public String createOrder(CreateOrderRequest request, String idempotencyKey) {
+        if (idempotencyKey != null) {
+            log.info("Checking idempotency key: {}", idempotencyKey);
+            var existingOrder = orderRepository.findByIdempotencyKey(idempotencyKey);
+            if (existingOrder.isPresent()) {
+                log.warn("Duplicate order detected for idempotency key: {}", idempotencyKey);
+                return existingOrder.get().getId();
+            }
+        }
+
         log.info("Creating order for customer: {}", request.customerId());
 
         // Increment order creation counter
@@ -44,6 +59,7 @@ public class OrderService {
         Order order = Order.builder()
                 .customerId(request.customerId())
                 .customerEmail(request.customerEmail())
+                .idempotencyKey(idempotencyKey)
                 .totalAmount(calculateTotal(request.items()))
                 .build();
 
@@ -81,7 +97,8 @@ public class OrderService {
      */
     @ApplicationModuleListener
     void onInventoryReserved(InventoryReservedEvent event) {
-        log.info("Received inventory reservation event for order: {}", event.orderId());
+        log.info("Received inventory reservation event for order: {} (success: {})", 
+                event.orderId(), event.success());
 
         orderRepository.findById(event.orderId()).ifPresent(order -> {
             if (event.success()) {
@@ -89,7 +106,7 @@ public class OrderService {
                 order.complete();
                 orderRepository.save(order);
 
-                // Publish completion event
+                // Publish completion event for notifications/shipping
                 OrderCompletedEvent completedEvent = new OrderCompletedEvent(
                         order.getId(),
                         order.getCustomerId(),
@@ -100,10 +117,37 @@ public class OrderService {
                 
                 log.info("Order {} completed successfully", event.orderId());
             } else {
+                log.warn("Inventory reservation failed for order {}: {}", event.orderId(), event.failureReason());
                 order.cancel(event.failureReason());
                 orderRepository.save(order);
-                log.warn("Order {} cancelled: {}", event.orderId(), event.failureReason());
+                
+                // Even if inventory failed, we publish cancellation in case other modules 
+                // (like Payments or Shipping) need to compensate.
+                publishCancellationEvent(order);
             }
+        });
+    }
+
+    private void publishCancellationEvent(Order order) {
+        List<OrderCancelledEvent.OrderItem> items = order.getItems().stream()
+                .map(item -> new OrderCancelledEvent.OrderItem(item.getProductId(), item.getQuantity()))
+                .toList();
+
+        eventPublisher.publishEvent(new OrderCancelledEvent(
+                order.getId(),
+                items,
+                Instant.now()
+        ));
+        log.info("OrderCancelledEvent published for order {}", order.getId());
+    }
+
+    @Transactional
+    public void cancelOrder(String orderId) {
+        log.info("Manually cancelling order: {}", orderId);
+        orderRepository.findById(orderId).ifPresent(order -> {
+            order.setStatus(OrderStatus.CANCELLED);
+            orderRepository.save(order);
+            publishCancellationEvent(order);
         });
     }
 

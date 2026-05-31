@@ -2,7 +2,7 @@ package com.showcase.ordersystem.orders;
 
 import com.showcase.ordersystem.orders.internal.Order;
 import com.showcase.ordersystem.orders.internal.OrderRepository;
-import com.showcase.ordersystem.shared.events.OrderCreatedEvent;
+import com.showcase.ordersystem.shared.OrderCreatedEvent;
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.MeterRegistry;
 import org.junit.jupiter.api.BeforeEach;

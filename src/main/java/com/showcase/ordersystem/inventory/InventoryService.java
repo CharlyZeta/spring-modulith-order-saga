@@ -2,13 +2,15 @@ package com.showcase.ordersystem.inventory;
 
 import com.showcase.ordersystem.inventory.internal.InventoryItem;
 import com.showcase.ordersystem.inventory.internal.InventoryRepository;
-import com.showcase.ordersystem.shared.events.InventoryReservedEvent;
-import com.showcase.ordersystem.shared.events.OrderCreatedEvent;
+import com.showcase.ordersystem.shared.InventoryReservedEvent;
+import com.showcase.ordersystem.shared.OrderCancelledEvent;
+import com.showcase.ordersystem.shared.OrderCreatedEvent;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.modulith.events.ApplicationModuleListener;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Instant;
@@ -33,31 +35,29 @@ public class InventoryService {
      * This demonstrates asynchronous inter-module communication via domain events.
      */
     @ApplicationModuleListener
-    void onOrderCreated(OrderCreatedEvent event) {
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public void onOrderCreated(OrderCreatedEvent event) {
         log.info("Received order created event for order: {}", event.orderId());
 
         String reservationId = UUID.randomUUID().toString();
-        boolean allItemsReserved = true;
-        String failureReason = null;
-
+        
         try {
             // Attempt to reserve inventory for each item
             for (OrderCreatedEvent.OrderItem item : event.items()) {
                 InventoryItem inventoryItem = inventoryRepository
                         .findByProductId(item.productId())
-                        .orElseThrow(() -> new IllegalStateException(
+                        .orElseThrow(() -> new IllegalArgumentException(
                                 "Product not found: " + item.productId()
                         ));
 
                 if (!inventoryItem.canReserve(item.quantity())) {
-                    allItemsReserved = false;
-                    failureReason = String.format(
+                    log.warn("Insufficient stock for product {} in order {}", item.productId(), event.orderId());
+                    publishFailure(event.orderId(), reservationId, String.format(
                             "Insufficient stock for product %s (requested: %d, available: %d)",
-                            item.productId(),
-                            item.quantity(),
-                            inventoryItem.getAvailableQuantity()
-                    );
-                    break;
+                            item.productId(), item.quantity(), inventoryItem.getAvailableQuantity()
+                    ));
+                    // We throw an exception to trigger @Transactional rollback of any previous items in the loop
+                    throw new RuntimeException("Insufficient stock - rolling back partial reservations");
                 }
 
                 inventoryItem.reserve(item.quantity());
@@ -67,24 +67,54 @@ public class InventoryService {
                         item.quantity(), item.productId(), event.orderId());
             }
 
-        } catch (Exception e) {
-            allItemsReserved = false;
-            failureReason = "Error reserving inventory: " + e.getMessage();
-            log.error("Failed to reserve inventory for order: {}", event.orderId(), e);
-        }
+            // If all items reserved successfully
+            publishSuccess(event.orderId(), reservationId);
 
-        // Publish inventory reservation result
+        } catch (IllegalArgumentException e) {
+            log.error("Validation error for order {}: {}", event.orderId(), e.getMessage());
+            publishFailure(event.orderId(), reservationId, e.getMessage());
+            throw e; // Rollback
+        } catch (Exception e) {
+            if (!(e instanceof RuntimeException && e.getMessage().contains("Insufficient stock"))) {
+                log.error("Unexpected error reserving inventory for order: {}", event.orderId(), e);
+                publishFailure(event.orderId(), reservationId, "Internal error: " + e.getMessage());
+            }
+            throw e; // Rollback
+        }
+    }
+
+    private void publishSuccess(String orderId, String reservationId) {
         InventoryReservedEvent reservedEvent = new InventoryReservedEvent(
-                event.orderId(),
-                reservationId,
-                allItemsReserved,
-                failureReason,
-                Instant.now()
+                orderId, reservationId, true, null, Instant.now()
         );
         eventPublisher.publishEvent(reservedEvent);
+        log.info("Published SUCCESS inventory reserved event for order: {}", orderId);
+    }
 
-        log.info("Published inventory reserved event for order: {} (success: {})",
-                event.orderId(), allItemsReserved);
+    private void publishFailure(String orderId, String reservationId, String reason) {
+        InventoryReservedEvent reservedEvent = new InventoryReservedEvent(
+                orderId, reservationId, false, reason, Instant.now()
+        );
+        eventPublisher.publishEvent(reservedEvent);
+        log.info("Published FAILURE inventory reserved event for order: {}", orderId);
+    }
+
+    /**
+     * Listens to OrderCancelledEvent and releases reserved inventory.
+     * This is a compensating transaction (Saga pattern).
+     */
+    @ApplicationModuleListener
+    void onOrderCancelled(OrderCancelledEvent event) {
+        log.info("Received order cancelled event for order: {}. Releasing inventory.", event.orderId());
+
+        event.items().forEach(item -> {
+            inventoryRepository.findByProductId(item.productId()).ifPresent(inventoryItem -> {
+                inventoryItem.release(item.quantity());
+                inventoryRepository.save(inventoryItem);
+                log.info("Released {} units of product {} for order {}", 
+                        item.quantity(), item.productId(), event.orderId());
+            });
+        });
     }
 
     /**

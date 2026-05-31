@@ -44,7 +44,7 @@ class OrderControllerTest {
                         "P1", "Product 1", 2, new BigDecimal("50.00")))
         );
 
-        when(orderService.createOrder(any())).thenReturn("order-123");
+        when(orderService.createOrder(any(), any())).thenReturn("order-123");
 
         mockMvc.perform(post("/api/orders")
                 .contentType(MediaType.APPLICATION_JSON)
