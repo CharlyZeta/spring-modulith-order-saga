@@ -1,5 +1,6 @@
 package com.showcase.ordersystem.orders;
 
+import com.showcase.ordersystem.inventory.InsufficientInventoryException;
 import com.showcase.ordersystem.orders.internal.Order;
 import com.showcase.ordersystem.orders.internal.OrderItem;
 import com.showcase.ordersystem.orders.internal.OrderRepository;
@@ -9,9 +10,12 @@ import com.showcase.ordersystem.shared.OrderCancelledEvent;
 import com.showcase.ordersystem.shared.OrderCompletedEvent;
 import com.showcase.ordersystem.shared.OrderCreatedEvent;
 import io.micrometer.core.instrument.MeterRegistry;
+import jakarta.persistence.EntityNotFoundException;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.ApplicationEventPublisher;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.modulith.events.ApplicationModuleListener;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -19,6 +23,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.List;
+import java.util.Optional;
 import java.util.stream.Collectors;
 
 /**
@@ -121,9 +126,8 @@ public class OrderService {
                 order.cancel(event.failureReason());
                 orderRepository.save(order);
                 
-                // Even if inventory failed, we publish cancellation in case other modules 
-                // (like Payments or Shipping) need to compensate.
-                publishCancellationEvent(order);
+                // Do NOT publish cancellation event here because the reservation failed
+                // and thus no inventory was ever committed to be released.
             }
         });
     }
@@ -152,14 +156,17 @@ public class OrderService {
     }
 
     @Transactional(readOnly = true)
-    public OrderInfo getOrderById(String orderId) {
-        return orderRepository.findById(orderId)
-                .map(this::mapToOrderInfo)
-                .orElseThrow(() -> new IllegalArgumentException("Order not found: " + orderId));
+    public Optional<OrderInfo> findOrderById(String orderId) {
+        return orderRepository.findById(orderId).map(this::mapToOrderInfo);
     }
 
     @Transactional(readOnly = true)
-    public org.springframework.data.domain.Page<OrderInfo> getOrdersByCustomer(String customerId, org.springframework.data.domain.Pageable pageable) {
+    public Page<OrderInfo> findAllOrders(Pageable pageable) {
+        return orderRepository.findAll(pageable).map(this::mapToOrderInfo);
+    }
+
+    @Transactional(readOnly = true)
+    public Page<OrderInfo> getOrdersByCustomer(String customerId, Pageable pageable) {
         return orderRepository.findByCustomerId(customerId, pageable)
                 .map(this::mapToOrderInfo);
     }

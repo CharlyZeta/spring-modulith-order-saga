@@ -1,10 +1,10 @@
 package com.showcase.ordersystem.orders;
 
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
-
-import java.util.List;
 
 /**
  * REST API for order management.
@@ -27,7 +27,14 @@ public class OrderController {
 
     @GetMapping("/{orderId}")
     public ResponseEntity<OrderService.OrderInfo> getOrderById(@PathVariable String orderId) {
-        return ResponseEntity.ok(orderService.getOrderById(orderId));
+        return orderService.findOrderById(orderId)
+                .map(ResponseEntity::ok)
+                .orElse(ResponseEntity.notFound().build());
+    }
+
+    @GetMapping
+    public ResponseEntity<Page<OrderService.OrderInfo>> getAllOrders(Pageable pageable) {
+        return ResponseEntity.ok(orderService.findAllOrders(pageable));
     }
 
     @PostMapping("/{orderId}/cancel")
@@ -37,11 +44,11 @@ public class OrderController {
     }
 
     @GetMapping("/customer/{customerId}")
-    public ResponseEntity<org.springframework.data.domain.Page<OrderService.OrderInfo>> getCustomerOrders(
+    public ResponseEntity<Page<OrderService.OrderInfo>> getCustomerOrders(
             @PathVariable String customerId,
-            org.springframework.data.domain.Pageable pageable) {
+            Pageable pageable) {
         
-        org.springframework.data.domain.Page<OrderService.OrderInfo> orders = orderService.getOrdersByCustomer(customerId, pageable);
+        Page<OrderService.OrderInfo> orders = orderService.getOrdersByCustomer(customerId, pageable);
         return ResponseEntity.ok(orders);
     }
 

@@ -1,19 +1,24 @@
 spring:
   datasource:
-    url: jdbc:tc:postgresql:15-alpine:///orderdb
-    driver-class-name: org.testcontainers.jdbc.ContainerDatabaseDriver
+    url: jdbc:postgresql://localhost:5433/orderdb
+    username: orderuser
+    password: orderpass
+    driver-class-name: org.postgresql.Driver
   
   flyway:
-    clean-disabled: false
-    # This will drop and recreate schema on startup in tests to avoid checksum issues
+    enabled: true
+    baseline-on-migrate: true
   
   jpa:
     hibernate:
-      ddl-auto: create-drop
+      ddl-auto: validate
     show-sql: true
 
   rabbitmq:
     host: localhost
+    port: 5672
+    username: guest
+    password: guest
     listener:
       simple:
-        auto-startup: false # Disable RabbitMQ in tests unless explicitly needed
+        auto-startup: false

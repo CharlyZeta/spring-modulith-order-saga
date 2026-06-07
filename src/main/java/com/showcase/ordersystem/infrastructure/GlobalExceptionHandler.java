@@ -1,49 +1,52 @@
 package com.showcase.ordersystem.infrastructure;
 
-import lombok.extern.slf4j.Slf4j;
+import com.showcase.ordersystem.inventory.InsufficientInventoryException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ProblemDetail;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.servlet.mvc.method.annotation.ResponseEntityExceptionHandler;
 
+import jakarta.persistence.EntityNotFoundException;
 import java.net.URI;
 import java.time.Instant;
 
 /**
- * Global Exception Handler using RFC 7807 (Problem Details for HTTP APIs).
+ * Global Exception Handler to provide consistent, RFC 7807-compliant error responses.
  */
 @RestControllerAdvice
-@Slf4j
 public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
 
-    @ExceptionHandler(IllegalArgumentException.class)
-    public ProblemDetail handleIllegalArgumentException(IllegalArgumentException ex) {
-        log.warn("Illegal argument: {}", ex.getMessage());
-        ProblemDetail problemDetail = ProblemDetail.forStatusAndDetail(HttpStatus.BAD_REQUEST, ex.getMessage());
-        problemDetail.setTitle("Invalid Request");
-        problemDetail.setType(URI.create("https://api.ordersystem.com/errors/invalid-request"));
-        problemDetail.setProperty("timestamp", Instant.now());
+    private static final String TIMESTAMP_PROPERTY = "timestamp";
+
+    @ExceptionHandler(EntityNotFoundException.class)
+    public ProblemDetail handleEntityNotFoundException(EntityNotFoundException ex) {
+        ProblemDetail problemDetail = ProblemDetail.forStatusAndDetail(HttpStatus.NOT_FOUND, ex.getMessage());
+        problemDetail.setTitle("Entity Not Found");
+        problemDetail.setType(URI.create("https://api.ordersystem.com/errors/not-found"));
+        problemDetail.setProperty(TIMESTAMP_PROPERTY, Instant.now());
         return problemDetail;
     }
 
-    @ExceptionHandler(IllegalStateException.class)
-    public ProblemDetail handleIllegalStateException(IllegalStateException ex) {
-        log.error("Illegal state: {}", ex.getMessage());
-        ProblemDetail problemDetail = ProblemDetail.forStatusAndDetail(HttpStatus.CONFLICT, ex.getMessage());
-        problemDetail.setTitle("Operational Conflict");
-        problemDetail.setType(URI.create("https://api.ordersystem.com/errors/conflict"));
-        problemDetail.setProperty("timestamp", Instant.now());
+    // Placeholder for a custom domain exception
+    @ExceptionHandler(InsufficientInventoryException.class)
+    public ProblemDetail handleInsufficientInventoryException(InsufficientInventoryException ex) {
+        ProblemDetail problemDetail = ProblemDetail.forStatusAndDetail(HttpStatus.BAD_REQUEST, ex.getMessage());
+        problemDetail.setTitle("Insufficient Inventory");
+        problemDetail.setType(URI.create("https://api.ordersystem.com/errors/insufficient-inventory"));
+        problemDetail.setProperty(TIMESTAMP_PROPERTY, Instant.now());
+        problemDetail.setProperty("productId", ex.getProductId());
+        problemDetail.setProperty("requestedQuantity", ex.getRequestedQuantity());
+        problemDetail.setProperty("availableQuantity", ex.getAvailableQuantity());
         return problemDetail;
     }
 
     @ExceptionHandler(Exception.class)
-    public ProblemDetail handleGeneralException(Exception ex) {
-        log.error("Unhandled exception: ", ex);
-        ProblemDetail problemDetail = ProblemDetail.forStatusAndDetail(HttpStatus.INTERNAL_SERVER_ERROR, "An unexpected error occurred");
+    public ProblemDetail handleGenericException(Exception ex) {
+        ProblemDetail problemDetail = ProblemDetail.forStatusAndDetail(HttpStatus.INTERNAL_SERVER_ERROR, "An unexpected error occurred.");
         problemDetail.setTitle("Internal Server Error");
-        problemDetail.setType(URI.create("https://api.ordersystem.com/errors/internal-error"));
-        problemDetail.setProperty("timestamp", Instant.now());
+        problemDetail.setType(URI.create("https://api.ordersystem.com/errors/internal-server-error"));
+        problemDetail.setProperty(TIMESTAMP_PROPERTY, Instant.now());
         return problemDetail;
     }
 }

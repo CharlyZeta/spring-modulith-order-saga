@@ -5,6 +5,7 @@ import com.showcase.ordersystem.inventory.internal.InventoryRepository;
 import com.showcase.ordersystem.shared.InventoryReservedEvent;
 import com.showcase.ordersystem.shared.OrderCancelledEvent;
 import com.showcase.ordersystem.shared.OrderCreatedEvent;
+import jakarta.persistence.EntityNotFoundException;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.ApplicationEventPublisher;
@@ -27,6 +28,7 @@ public class InventoryService {
 
     private final InventoryRepository inventoryRepository;
     private final ApplicationEventPublisher eventPublisher;
+    private final org.springframework.transaction.support.TransactionTemplate transactionTemplate;
 
     /**
      * Listens to OrderCreatedEvent from the Orders module.
@@ -35,51 +37,48 @@ public class InventoryService {
      * This demonstrates asynchronous inter-module communication via domain events.
      */
     @ApplicationModuleListener
-    @Transactional(propagation = Propagation.REQUIRES_NEW)
     public void onOrderCreated(OrderCreatedEvent event) {
         log.info("Received order created event for order: {}", event.orderId());
 
         String reservationId = UUID.randomUUID().toString();
         
         try {
-            // Attempt to reserve inventory for each item
-            for (OrderCreatedEvent.OrderItem item : event.items()) {
-                InventoryItem inventoryItem = inventoryRepository
-                        .findByProductId(item.productId())
-                        .orElseThrow(() -> new IllegalArgumentException(
-                                "Product not found: " + item.productId()
-                        ));
+            // Attempt to reserve inventory in its own transaction
+            transactionTemplate.setPropagationBehavior(org.springframework.transaction.TransactionDefinition.PROPAGATION_REQUIRES_NEW);
+            transactionTemplate.executeWithoutResult(status -> {
+                for (OrderCreatedEvent.OrderItem item : event.items()) {
+                    InventoryItem inventoryItem = inventoryRepository
+                            .findByProductId(item.productId())
+                            .orElseThrow(() -> new EntityNotFoundException(
+                                    "Product not found: " + item.productId()
+                            ));
 
-                if (!inventoryItem.canReserve(item.quantity())) {
-                    log.warn("Insufficient stock for product {} in order {}", item.productId(), event.orderId());
-                    publishFailure(event.orderId(), reservationId, String.format(
-                            "Insufficient stock for product %s (requested: %d, available: %d)",
-                            item.productId(), item.quantity(), inventoryItem.getAvailableQuantity()
-                    ));
-                    // We throw an exception to trigger @Transactional rollback of any previous items in the loop
-                    throw new RuntimeException("Insufficient stock - rolling back partial reservations");
+                    if (!inventoryItem.canReserve(item.quantity())) {
+                        log.warn("Insufficient stock for product {} in order {}", item.productId(), event.orderId());
+                        throw new InsufficientInventoryException(
+                                item.productId(), item.quantity(), inventoryItem.getAvailableQuantity()
+                        );
+                    }
+
+                    inventoryItem.reserve(item.quantity());
+                    inventoryRepository.save(inventoryItem);
+                    
+                    log.info("Reserved {} units of product {} for order {}",
+                            item.quantity(), item.productId(), event.orderId());
                 }
-
-                inventoryItem.reserve(item.quantity());
-                inventoryRepository.save(inventoryItem);
-                
-                log.info("Reserved {} units of product {} for order {}",
-                        item.quantity(), item.productId(), event.orderId());
-            }
-
-            // If all items reserved successfully
+            });
+            
+            // If successful, publish success
             publishSuccess(event.orderId(), reservationId);
 
-        } catch (IllegalArgumentException e) {
+        } catch (InsufficientInventoryException e) {
+            publishFailure(event.orderId(), reservationId, e.getMessage());
+        } catch (EntityNotFoundException e) {
             log.error("Validation error for order {}: {}", event.orderId(), e.getMessage());
             publishFailure(event.orderId(), reservationId, e.getMessage());
-            throw e; // Rollback
         } catch (Exception e) {
-            if (!(e instanceof RuntimeException && e.getMessage().contains("Insufficient stock"))) {
-                log.error("Unexpected error reserving inventory for order: {}", event.orderId(), e);
-                publishFailure(event.orderId(), reservationId, "Internal error: " + e.getMessage());
-            }
-            throw e; // Rollback
+            log.error("Unexpected error reserving inventory for order: {}", event.orderId(), e);
+            publishFailure(event.orderId(), reservationId, "Internal error: " + e.getMessage());
         }
     }
 
@@ -141,7 +140,7 @@ public class InventoryService {
                         item.getAvailableQuantity(),
                         item.getReservedQuantity()
                 ))
-                .orElseThrow(() -> new IllegalArgumentException("Product not found: " + productId));
+                .orElseThrow(() -> new EntityNotFoundException("Product not found: " + productId));
     }
 
     public record InventoryStatus(

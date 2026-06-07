@@ -23,6 +23,7 @@ public class RabbitMQConfig {
     public static final String EMAIL_ROUTING_KEY = "notification.email";
     public static final String NOTIFICATIONS_DLX = "notifications.dlx";
     public static final String DLQ_QUEUE = "notification.email.dlq";
+    public static final String DLQ_ROUTING_KEY = "notification.email.dlq";
 
     @Bean
     public TopicExchange notificationsExchange() {
@@ -33,18 +34,18 @@ public class RabbitMQConfig {
     public Queue emailQueue() {
         return QueueBuilder.durable(EMAIL_QUEUE)
                 .withArgument("x-dead-letter-exchange", NOTIFICATIONS_DLX)
-                .withArgument("x-dead-letter-routing-key", "notification.email.dlq")
+                .withArgument("x-dead-letter-routing-key", DLQ_ROUTING_KEY)
                 .build();
     }
 
     @Bean
     public Binding emailBinding(Queue emailQueue, TopicExchange notificationsExchange) {
-        return BindingBuilder.bind(emailQueue).to(notificationsExchange).with("notification.email");
+        return BindingBuilder.bind(emailQueue).to(notificationsExchange).with(EMAIL_ROUTING_KEY);
     }
 
     @Bean
-    public TopicExchange notificationsDlx() {
-        return new TopicExchange(NOTIFICATIONS_DLX);
+    public DirectExchange notificationsDlx() {
+        return new DirectExchange(NOTIFICATIONS_DLX);
     }
 
     @Bean
@@ -53,8 +54,8 @@ public class RabbitMQConfig {
     }
 
     @Bean
-    public Binding dlqBinding(Queue dlqQueue, TopicExchange notificationsDlx) {
-        return BindingBuilder.bind(dlqQueue).to(notificationsDlx).with("notification.email.dlq");
+    public Binding dlqBinding(Queue dlqQueue, DirectExchange notificationsDlx) {
+        return BindingBuilder.bind(dlqQueue).to(notificationsDlx).with(DLQ_ROUTING_KEY);
     }
 
     @Bean

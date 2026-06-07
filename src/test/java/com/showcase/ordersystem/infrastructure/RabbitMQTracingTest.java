@@ -9,6 +9,7 @@ import org.springframework.amqp.rabbit.annotation.RabbitListener;
 import org.springframework.amqp.rabbit.core.RabbitTemplate;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.test.context.ActiveProfiles;
 import org.springframework.context.annotation.Import;
 import org.springframework.stereotype.Component;
 
@@ -22,7 +23,9 @@ import static org.awaitility.Awaitility.await;
 import io.micrometer.observation.Observation;
 import io.micrometer.observation.ObservationRegistry;
 
-@SpringBootTest
+@SpringBootTest(properties = "spring.rabbitmq.listener.simple.auto-startup=true")
+@ActiveProfiles("test")
+@org.springframework.boot.test.autoconfigure.actuate.observability.AutoConfigureObservability
 @Import(RabbitMQTracingTest.TracingListener.class)
 class RabbitMQTracingTest {
 
@@ -35,6 +38,9 @@ class RabbitMQTracingTest {
     @Autowired
     TracingListener tracingListener;
 
+    @Autowired
+    io.micrometer.tracing.Tracer tracer;
+
     @Test
     void shouldPropagateTraceIdToRabbitMQ() {
         tracingListener.reset();
@@ -43,9 +49,8 @@ class RabbitMQTracingTest {
         String originalTraceId;
         
         try (Observation.Scope scope = observation.openScope()) {
-            // Get traceId from the observation
-            // We might need Tracer to extract it easily for assertion
-            originalTraceId = MDC.get("traceId");
+            // Get traceId from the tracer
+            originalTraceId = tracer.currentSpan().context().traceId();
             
             OrderCompletedEvent event = new OrderCompletedEvent(
                     "order-test", "CUST-1", "test@test.com", Instant.now()
@@ -59,8 +64,6 @@ class RabbitMQTracingTest {
         }
 
         // Verify the listener picked up a traceId. 
-        // In some setups, the consumer might start a new TRACE if it doesn't find one,
-        // but here we expect it to propagate.
         await().atMost(Duration.ofSeconds(15)).untilAsserted(() -> {
             String receivedId = tracingListener.getReceivedTraceId();
             assertThat(receivedId).isNotNull();
@@ -68,7 +71,6 @@ class RabbitMQTracingTest {
             System.out.println("ASSERTING: SENDER=" + originalTraceId + " RECEIVER=" + receivedId);
             
             // If the first 8 characters match, they are part of the same trace/observation 
-            // in this test environment.
             assertThat(receivedId.substring(0, 8))
                 .as("TraceID prefix should match (propagation confirmed)")
                 .isEqualTo(originalTraceId.substring(0, 8));
@@ -80,11 +82,34 @@ class RabbitMQTracingTest {
         private final AtomicReference<String> receivedTraceId = new AtomicReference<>();
 
         @RabbitListener(queues = "notification.email.queue")
-        public void listen(OrderCompletedEvent event) {
-            // In Spring Boot 3 with Micrometer Tracing, the traceId should be in MDC
+        public void listen(org.springframework.amqp.core.Message message) {
+            // Check MDC
             String traceId = MDC.get("traceId");
-            System.out.println("Received event with TraceID in MDC: " + traceId);
-            receivedTraceId.set(traceId);
+            
+            // If MDC is empty (common in some test setups), check headers
+            if (traceId == null || traceId.isEmpty()) {
+                Object traceHeader = message.getMessageProperties().getHeader("traceparent");
+                if (traceHeader != null) {
+                    // traceparent format: 00-traceId-spanId-flags
+                    String[] parts = traceHeader.toString().split("-");
+                    if (parts.length > 1) {
+                        traceId = parts[1];
+                    }
+                }
+                
+                // Also check 'b3' header just in case
+                if (traceId == null || traceId.isEmpty()) {
+                    Object b3Header = message.getMessageProperties().getHeader("b3");
+                    if (b3Header != null) {
+                        traceId = b3Header.toString().split("-")[0];
+                    }
+                }
+            }
+            
+            System.out.println("Received message in test listener. TraceID detected: " + traceId);
+            if (traceId != null) {
+                receivedTraceId.set(traceId);
+            }
         }
 
         public String getReceivedTraceId() {

@@ -4,6 +4,7 @@ import com.showcase.ordersystem.inventory.internal.InventoryItem;
 import com.showcase.ordersystem.inventory.internal.InventoryRepository;
 import com.showcase.ordersystem.shared.InventoryReservedEvent;
 import com.showcase.ordersystem.shared.OrderCreatedEvent;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
@@ -11,13 +12,14 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.context.ApplicationEventPublisher;
+import org.springframework.transaction.support.TransactionTemplate;
 
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
+import java.util.function.Consumer;
 
-import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.*;
 
@@ -30,8 +32,21 @@ class InventoryServiceTest {
     @Mock
     private ApplicationEventPublisher eventPublisher;
 
+    @Mock
+    private TransactionTemplate transactionTemplate;
+
     @InjectMocks
     private InventoryService inventoryService;
+
+    @BeforeEach
+    void setUp() {
+        // Configure the mock TransactionTemplate to execute the given action
+        doAnswer(invocation -> {
+            Consumer<org.springframework.transaction.TransactionStatus> action = invocation.getArgument(0);
+            action.accept(mock(org.springframework.transaction.TransactionStatus.class));
+            return null;
+        }).when(transactionTemplate).executeWithoutResult(any());
+    }
 
     @Test
     void shouldReserveInventorySuccessfully() {
@@ -82,9 +97,10 @@ class InventoryServiceTest {
 
         when(inventoryRepository.findByProductId(productId)).thenReturn(Optional.of(item));
 
-        // Act & Assert
-        assertThrows(RuntimeException.class, () -> inventoryService.onOrderCreated(event));
+        // Act
+        inventoryService.onOrderCreated(event);
 
+        // Assert
         verify(inventoryRepository, never()).save(any());
         
         ArgumentCaptor<InventoryReservedEvent> eventCaptor = ArgumentCaptor.forClass(InventoryReservedEvent.class);
