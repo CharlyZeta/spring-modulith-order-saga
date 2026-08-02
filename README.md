@@ -201,12 +201,4 @@ docker-compose up -d
 * **RabbitMQ Manager:** [http://localhost:15672](http://localhost:15672) (user: `guest`, pass: `guest`)
 
 ---
-
-## 🏷️ GitHub Topics Recomendados (SEO)
-
-Para maximizar la visibilidad del repositorio en GitHub, se recomienda asignar las siguientes etiquetas (*Topics*) en la configuración del repositorio:
-
-`spring-modulith` · `java21` · `spring-boot3` · `saga-pattern` · `modular-monolith` · `rabbitmq` · `domain-driven-design` · `distributed-tracing` · `zipkin` · `flyway` · `outbox-pattern`
-
----
 Desarrollado como un showcase de arquitectura moderna en el ecosistema Spring. 🌍
