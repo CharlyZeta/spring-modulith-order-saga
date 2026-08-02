@@ -32,10 +32,10 @@ class OrderFlowIntegrationTest {
     @BeforeEach
     void setUp() {
         // Clean up database before each test to ensure isolation
-        jdbcTemplate.execute("TRUNCATE TABLE order_items CASCADE");
-        jdbcTemplate.execute("TRUNCATE TABLE orders CASCADE");
-        jdbcTemplate.execute("TRUNCATE TABLE inventory_items CASCADE");
-        jdbcTemplate.execute("TRUNCATE TABLE event_publication CASCADE");
+        jdbcTemplate.execute("DELETE FROM order_items");
+        jdbcTemplate.execute("DELETE FROM orders");
+        jdbcTemplate.execute("DELETE FROM inventory_items");
+        jdbcTemplate.execute("DELETE FROM event_publication");
 
         // Initialize inventory before each test
         inventoryService.initializeInventory("PROD-1", "Test Product", 10);

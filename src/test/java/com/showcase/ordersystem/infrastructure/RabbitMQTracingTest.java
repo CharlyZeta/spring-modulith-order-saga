@@ -23,6 +23,12 @@ import static org.awaitility.Awaitility.await;
 import io.micrometer.observation.Observation;
 import io.micrometer.observation.ObservationRegistry;
 
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Assumptions;
+import java.io.IOException;
+import java.net.InetSocketAddress;
+import java.net.Socket;
+
 @SpringBootTest(properties = "spring.rabbitmq.listener.simple.auto-startup=true")
 @ActiveProfiles("test")
 @org.springframework.boot.test.autoconfigure.actuate.observability.AutoConfigureObservability
@@ -40,6 +46,15 @@ class RabbitMQTracingTest {
 
     @Autowired
     io.micrometer.tracing.Tracer tracer;
+
+    @BeforeEach
+    void checkRabbitMQAvailable() {
+        try (Socket socket = new Socket()) {
+            socket.connect(new InetSocketAddress("localhost", 5672), 500);
+        } catch (IOException e) {
+            Assumptions.assumeTrue(false, "RabbitMQ broker is not running on localhost:5672. Skipping live RabbitMQ test.");
+        }
+    }
 
     @Test
     void shouldPropagateTraceIdToRabbitMQ() {

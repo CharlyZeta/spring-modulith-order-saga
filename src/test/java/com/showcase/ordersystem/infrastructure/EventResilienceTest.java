@@ -6,6 +6,8 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.jdbc.core.JdbcTemplate;
 
+import org.springframework.test.context.ActiveProfiles;
+
 import java.math.BigDecimal;
 import java.util.List;
 import java.util.Map;
@@ -14,9 +16,9 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 /**
  * Verifies that events are being recorded in the event_publication table.
- * Assumes infrastructure (Postgres) is already running (e.g. via docker-compose).
  */
 @SpringBootTest
+@ActiveProfiles("test")
 class EventResilienceTest {
 
     @Autowired

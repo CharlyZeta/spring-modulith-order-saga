@@ -14,9 +14,17 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.awaitility.Awaitility.await;
 import java.time.Duration;
 
+import org.springframework.test.context.ActiveProfiles;
 import org.springframework.context.annotation.Import;
 
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Assumptions;
+import java.io.IOException;
+import java.net.InetSocketAddress;
+import java.net.Socket;
+
 @SpringBootTest
+@ActiveProfiles("test")
 @Import({RabbitMQResilienceTest.FlakyListener.class, RabbitMQResilienceTest.DlqConsumer.class})
 class RabbitMQResilienceTest {
 
@@ -25,6 +33,15 @@ class RabbitMQResilienceTest {
 
     @Autowired
     DlqConsumer dlqConsumer;
+
+    @BeforeEach
+    void checkRabbitMQAvailable() {
+        try (Socket socket = new Socket()) {
+            socket.connect(new InetSocketAddress("localhost", 5672), 500);
+        } catch (IOException e) {
+            Assumptions.assumeTrue(false, "RabbitMQ broker is not running on localhost:5672. Skipping live RabbitMQ test.");
+        }
+    }
 
     @Test
     void shouldSendToDlqAfterRetryExhaustion() {

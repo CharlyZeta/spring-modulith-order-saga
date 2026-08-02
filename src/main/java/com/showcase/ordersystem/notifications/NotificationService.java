@@ -45,12 +45,17 @@ public class NotificationService {
         );
 
         // Send to RabbitMQ (external notification service would consume this)
-        rabbitTemplate.convertAndSend(
-                "notifications.exchange",
-                "notification.email",
-                message
-        );
-        log.info("Sent notification to RabbitMQ for customer: {}", event.customerEmail());
+        try {
+            rabbitTemplate.convertAndSend(
+                    "notifications.exchange",
+                    "notification.email",
+                    message
+            );
+            log.info("Sent notification to RabbitMQ for customer: {}", event.customerEmail());
+        } catch (org.springframework.amqp.AmqpException e) {
+            log.warn("Could not send notification via RabbitMQ for customer {} (broker unreachable: {})",
+                    event.customerEmail(), e.getMessage());
+        }
     }
 
     /**
