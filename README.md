@@ -19,39 +19,42 @@ El sistema está estructurado internamente en **módulos aislados**, validados e
 
 ```mermaid
 graph TD
-    subgraph "Orders Module [com.showcase.ordersystem.orders]"
-        OC[OrderController] --> OS[OrderService]
-        OS --> OR[(OrderRepository)]
+    subgraph OrdersModule ["Orders Module"]
+        OC["OrderController"] --> OS["OrderService"]
+        OS --> OR[("OrderRepository")]
     end
 
-    subgraph "Inventory Module [com.showcase.ordersystem.inventory]"
-        IS[InventoryService] --> IR[(InventoryRepository)]
+    subgraph InventoryModule ["Inventory Module"]
+        IS["InventoryService"] --> IR[("InventoryRepository")]
     end
 
-    subgraph "Notifications Module [com.showcase.ordersystem.notifications]"
-        NS[NotificationService]
+    subgraph NotificationsModule ["Notifications Module"]
+        NS["NotificationService"]
     end
 
-    subgraph "Shared Domain Events [com.showcase.ordersystem.shared]"
-        E1[OrderCreatedEvent]
-        E2[InventoryReservedEvent]
-        E3[OrderCompletedEvent]
-        E4[OrderCancelledEvent]
+    subgraph SharedEvents ["Shared Domain Events"]
+        E1["OrderCreatedEvent"]
+        E2["InventoryReservedEvent"]
+        E3["OrderCompletedEvent"]
+        E4["OrderCancelledEvent"]
     end
 
-    subgraph "Infrastructure Layer"
-        RMQ[RabbitMQ Broker]
-        OUTBOX[(Event Publication Registry)]
+    subgraph InfrastructureLayer ["Infrastructure Layer"]
+        RMQ["RabbitMQ Broker"]
+        OUTBOX[("Event Publication Registry")]
     end
 
-    OS -- Publishes --> E1
-    E1 -- Consumed by --> IS
-    IS -- Publishes --> E2
-    E2 -- Consumed by --> OS
-    OS -- Publishes --> E3 & E4
-    E3 -- Consumed by --> NS
-    NS -- Emits AMQP --> RMQ
-    OS & IS & NS -- Transact via --> OUTBOX
+    OS -->|Publishes| E1
+    E1 -->|Consumed by| IS
+    IS -->|Publishes| E2
+    E2 -->|Consumed by| OS
+    OS -->|Publishes| E3
+    OS -->|Publishes| E4
+    E3 -->|Consumed by| NS
+    NS -->|Emits AMQP| RMQ
+    OS -->|Transact via| OUTBOX
+    IS -->|Transact via| OUTBOX
+    NS -->|Transact via| OUTBOX
 ```
 
 ---
@@ -63,35 +66,35 @@ El sistema implementa una **Saga Coreografiada** mediante eventos de dominio con
 ```mermaid
 sequenceDiagram
     autonumber
-    actor Client as 👤 Cliente / API Client
-    participant API as 📦 Orders Module
-    participant DB as 🗄️ PostgreSQL (Outbox)
-    participant INV as 🏭 Inventory Module
-    participant NOTIF as 🔔 Notifications Module
-    participant MQ as 🐇 RabbitMQ
+    actor Client as Cliente / API Client
+    participant API as Orders Module
+    participant DB as PostgreSQL (Outbox)
+    participant INV as Inventory Module
+    participant NOTIF as Notifications Module
+    participant MQ as RabbitMQ
 
     rect rgb(235, 245, 255)
-        note over Client, INV: 🟢 Flujo Feliz (Stock Disponible)
-        Client->>API: POST /api/orders (X-Idempotency-Key)
-        API->>DB: Guarda Pedido (PENDING) + OrderCreatedEvent en Outbox
+        note over Client, INV: Flujo Feliz (Stock Disponible)
+        Client->>API: POST /api/orders
+        API->>DB: Guarda Pedido (PENDING) + OrderCreatedEvent
         API-->>Client: 200 OK (orderId)
-        DB-->>INV: Dispara @ApplicationModuleListener onOrderCreated
-        INV->>INV: Reserva stock atómicamente (REQUIRES_NEW)
-        INV->>DB: Publica InventoryReservedEvent(success=true)
-        DB-->>API: Dispara onInventoryReserved(success=true)
-        API->>DB: Actualiza Pedido a COMPLETED + Publica OrderCompletedEvent
+        DB-->>INV: Dispara onOrderCreated
+        INV->>INV: Reserva stock atómicamente
+        INV->>DB: Publica InventoryReservedEvent (success=true)
+        DB-->>API: Dispara onInventoryReserved (success=true)
+        API->>DB: Actualiza Pedido a COMPLETED + OrderCompletedEvent
         DB-->>NOTIF: Dispara onOrderCompleted
         NOTIF->>MQ: Envía mensaje a notification.email.queue
     end
 
     rect rgb(255, 235, 235)
-        note over Client, INV: 🔴 Flujo de Falla y Compensación (Stock Insuficiente)
+        note over Client, INV: Flujo de Falla y Compensación (Stock Insuficiente)
         Client->>API: POST /api/orders (Sin Stock)
         API->>DB: Guarda Pedido (PENDING) + OrderCreatedEvent
         DB-->>INV: Dispara onOrderCreated
-        INV->>INV: Falla reserva -> Rollback local atómico
-        INV->>DB: Publica InventoryReservedEvent(success=false)
-        DB-->>API: Dispara onInventoryReserved(success=false)
+        INV->>INV: Falla reserva: Rollback local atómico
+        INV->>DB: Publica InventoryReservedEvent (success=false)
+        DB-->>API: Dispara onInventoryReserved (success=false)
         API->>DB: Actualiza Pedido a CANCELLED (Saga Rollback)
     end
 ```
